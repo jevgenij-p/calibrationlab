@@ -62,6 +62,9 @@ class MainWindow(wx.Frame):
         calibration_file = (calibration_file_name[:16] + '...') \
             if len(calibration_file_name) > 16 else calibration_file_name
 
+        self.calibration_panel = CalibrationPanel(panel2)
+        self.calibration_panel.status = "no"
+
         sizer3 = wx.FlexGridSizer(3, 2, 4, 10)
         label1 = wx.StaticText(panel2, label="Calibrated:")
         self.calibration_status = wx.StaticText(panel2, label="no")
@@ -80,12 +83,10 @@ class MainWindow(wx.Frame):
 
         self.button_calibrate = wx.Button(panel2, label='Calibrate')
         self.button_calibrate.Bind(wx.EVT_BUTTON, self._on_calibrate)
+
+        sizer2.Add(self.calibration_panel, flag=wx.LEFT|wx.RIGHT|wx.EXPAND)
         sizer2.Add(self.button_calibrate, flag=wx.TOP, border=6)
-
         sizer1.Add(panel2, flag=wx.LEFT|wx.RIGHT|wx.BOTTOM, border=16)
-
-        clibration_panel = CalibrationPanel(panel2)
-        sizer2.Add(clibration_panel, flag=wx.TOP, border=20)
 
         panel2.SetSizer(sizer2)
         panel1.SetSizer(sizer1)
@@ -115,7 +116,7 @@ class MainWindow(wx.Frame):
         for i in range(0, 5):
             menu_id = wx.NewId()
             self.camera_menu_ids.append(menu_id)
-            menu_item = menu2.Append(menu_id, "Camera {}".format(i), kind=wx.ITEM_RADIO)
+            menu_item = menu2.Append(menu_id, f"Camera {i}", kind=wx.ITEM_RADIO)
             camera_menu_items.append(menu_item)
             self.Bind(wx.EVT_MENU, self._on_camera, menu_item)
 
@@ -143,7 +144,7 @@ class MainWindow(wx.Frame):
         try:
             self.camera.capture_video(device, fps, size)
         except TypeError:
-            dialog = wx.MessageDialog(self, "Could not open camera %d" % self.camera.device, "Error")
+            dialog = wx.MessageDialog(self, f"Could not open camera {self.camera.device}", "Error")
             dialog.SetOKLabel("Close")
             dialog.ShowModal()
             dialog.Destroy()
@@ -158,7 +159,7 @@ class MainWindow(wx.Frame):
         # pylint: disable=W0613
         menu_id = event.GetId()
         device_number = self.camera_menu_ids.index(menu_id)
-        self.camera_label.SetLabel("Camera {}".format(device_number))
+        self.camera_label.SetLabel(f"Camera {device_number}")
         self.capture_video(device_number)
 
     def _on_calibrate(self, event):
@@ -169,12 +170,16 @@ class MainWindow(wx.Frame):
     def on_calibrated(self):
         # pylint: disable=C0111
         self.button_calibrate.Enable()
+        self.calibration_panel.status = "yes" if self.calibration.is_calibrated else "no"
+        self.calibration_panel.error = "{:.3f}".format(self.calibration.mean_error) \
+            if self.calibration.is_calibrated else ""
         self.calibration_status.SetLabel("yes" if self.calibration.is_calibrated else "no")
         self.calibration_error.SetLabel("{:.3f}".format(self.calibration.mean_error) \
             if self.calibration.is_calibrated else "")
 
     def on_calibration_progress(self, progress):
         # pylint: disable=C0111
+        self.calibration_panel.status = progress
         self.calibration_status.SetLabel(progress)
 
     def _on_next_frame(self, event):
@@ -223,7 +228,7 @@ class MainWindow(wx.Frame):
             try:
                 self.captured_image.SaveFile(pathname, wx.BITMAP_TYPE_BMP)
             except IOError:
-                wx.LogError("Cannot save captured image in file '%s'." % pathname)
+                wx.LogError(f"Cannot save captured image in file '{pathname}'.")
 
     def _on_exit(self, event):
         # pylint: disable=W0613

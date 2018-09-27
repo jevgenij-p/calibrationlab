@@ -1,2 +1,12 @@
 {
+    "explorer.confirmDelete": false,
+    "python.autoComplete.preloadModules": [
+        "numpy",
+        "wxpython",
+        "opencv"
+    ],
+    "python.linting.enabled": true,
+    "python.linting.pylintArgs": [
+        "--extension-pkg-whitelist=cv2,wx,win32api,win32file,win32process"
+    ]
 }
