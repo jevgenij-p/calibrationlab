@@ -9,6 +9,7 @@ import wx
 import cv2
 from camera import Camera
 from calibration import CameraCalibration
+from calibrationpanel import CalibrationPanel
 
 __author__ = "Jevgenijs Pankovs"
 __license__ = "GNU GPL 3.0 or later"
@@ -23,11 +24,6 @@ class MainWindow(wx.Frame):
 
         wx.Frame.__init__(self, parent, title=title,
                           style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER)
-        self.device = 0         # to remove
-        self.fps = 30         # to remove
-        self.image_width = SCREEN_WIDTH
-        self.image_height = SCREEN_HEIGHT
-        self.capture = None         # to remove
         self.captured_image = None
         self.timer = None
         self.bitmap = None
@@ -87,6 +83,10 @@ class MainWindow(wx.Frame):
         sizer2.Add(self.button_calibrate, flag=wx.TOP, border=6)
 
         sizer1.Add(panel2, flag=wx.LEFT|wx.RIGHT|wx.BOTTOM, border=16)
+
+        clibration_panel = CalibrationPanel(panel2)
+        sizer2.Add(clibration_panel, flag=wx.TOP, border=20)
+
         panel2.SetSizer(sizer2)
         panel1.SetSizer(sizer1)
 
@@ -138,15 +138,12 @@ class MainWindow(wx.Frame):
             fps (int): Frames per second. Default is 30 frames.
             size ((width, height)): Frame width and height in pixels.
         """
-        self.device = device
-        self.fps = fps
-        self.image_width, self.image_height = size
 
         # open webcam
         try:
             self.camera.capture_video(device, fps, size)
         except TypeError:
-            dialog = wx.MessageDialog(self, "Could not open camera %d" % self.device, "Error")
+            dialog = wx.MessageDialog(self, "Could not open camera %d" % self.camera.device, "Error")
             dialog.SetOKLabel("Close")
             dialog.ShowModal()
             dialog.Destroy()
@@ -154,7 +151,7 @@ class MainWindow(wx.Frame):
 
         # set up periodic screen capture
         self.timer = wx.Timer(self)
-        self.timer.Start(1000. / self.fps)
+        self.timer.Start(1000. / self.camera.fps)
         self.Bind(wx.EVT_TIMER, self._on_next_frame)
 
     def _on_camera(self, event):
@@ -192,8 +189,7 @@ class MainWindow(wx.Frame):
 
             # update buffer and paint
             if self.bitmap is None:
-                self.image_height, self.image_width = frame.shape[:2]
-                self.bitmap = wx.Bitmap.FromBuffer(self.image_width, self.image_height, frame)
+                self.bitmap = wx.Bitmap.FromBuffer(frame.shape[1], frame.shape[0], frame)
             else:
                 self.bitmap.CopyFromBuffer(frame)
 
@@ -231,17 +227,16 @@ class MainWindow(wx.Frame):
 
     def _on_exit(self, event):
         # pylint: disable=W0613
-        self.capture.release()
+        self.camera.release()
         self.Close(True)
 
 
 def main():
     """Method creating main window.
     """
-    image_size = (640, 480)
     app = wx.App(False)
     frame = MainWindow(None, "Camera")
-    frame.capture_video(device=0, fps=30, size=image_size)
+    frame.capture_video(device=0, fps=30, size=(640, 480))
     app.SetTopWindow(frame)
     app.MainLoop()
 

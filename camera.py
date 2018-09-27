@@ -10,10 +10,20 @@ class Camera():
 
     def __init__(self):
         self.capture = None
-        self.device = 0
-        self.fps = 30
+        self._device = 0
+        self._fps = 30
         self.image_width = CAMERA_WIDTH
         self.image_height = CAMERA_HEIGHT
+
+    @property
+    def device(self):
+        """Device number."""
+        return self._device
+
+    @property
+    def fps(self):
+        """Frames per second."""
+        return self._fps
 
     def capture_video(self, device=0, fps=30, size=(CAMERA_WIDTH, CAMERA_HEIGHT)):
         """Sets periodic screen capture.
@@ -23,12 +33,12 @@ class Camera():
             fps (int): Frames per second. Default is 30 frames.
             size ((width, height)): Frame width and height in pixels.
         """
-        self.device = device
-        self.fps = fps
+        self._device = device
+        self._fps = fps
         self.image_width, self.image_height = size
 
         # open webcam
-        self.capture = cv2.VideoCapture(self.device)
+        self.capture = cv2.VideoCapture(self._device)
         if not self.capture.isOpened():
             if not self.capture.open():
                 raise TypeError
@@ -40,6 +50,10 @@ class Camera():
         """Reads next frame from the camera.
 
         Returns:
-            success (bool), frame (image): True if success; video image frame.
+            retval, image: True if success; video image frame.
         """
         return self.capture.read()
+
+    def release(self):
+        """Closes video file or capturing device."""
+        self.capture.release()
