@@ -123,12 +123,10 @@ class MainWindow(wx.Frame):
         self.menu_save_calibration.Enable(False)
 
         menu2 = wx.Menu()
-        camera_menu_items = []
         for i in range(0, 5):
             menu_id = wx.NewId()
             self.camera_menu_ids.append(menu_id)
             menu_item = menu2.Append(menu_id, f"Camera {i}", kind=wx.ITEM_RADIO)
-            camera_menu_items.append(menu_item)
             self.Bind(wx.EVT_MENU, self.on_camera, menu_item)
 
         menu2.Check(self.camera_menu_ids[0], True)
@@ -139,6 +137,7 @@ class MainWindow(wx.Frame):
         self.SetMenuBar(menu_bar)
 
         # Set events
+        self.Bind(wx.EVT_MENU, self.on_save_calibration, self.menu_save_calibration)
         self.Bind(wx.EVT_MENU, self.on_save_capture, self.menu_save_capture)
         self.Bind(wx.EVT_MENU, self.on_exit, menu_exit)
 
@@ -260,6 +259,19 @@ class MainWindow(wx.Frame):
                 self.captured_image.SaveFile(pathname, wx.BITMAP_TYPE_BMP)
             except IOError:
                 wx.LogError(f"Cannot save captured image in file '{pathname}'.")
+
+    def on_save_calibration(self, event):
+        with wx.FileDialog(self, "Save calibration file", wildcard="JSON files (*.json)|*.json",
+                           style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as file_dialog:
+
+            if file_dialog.ShowModal() == wx.ID_CANCEL:
+                return
+
+            pathname = file_dialog.GetPath()
+            try:
+                self.calibration.save_calibration(pathname)
+            except IOError:
+                wx.LogError(f"Cannot save calibration data in file '{pathname}'.")
 
     def on_exit(self, event):
         # pylint: disable=W0613

@@ -1,5 +1,6 @@
 """A module for camera calibration using a chessboard."""
 
+import json
 import numpy as np
 import cv2
 from event import Event
@@ -16,6 +17,8 @@ class CameraCalibration():
         self.recording = False
         self._mean_error = 0
         self._is_calibrated = False
+        self._camera_matrix = []
+        self._dist_coeff = []
 
         # events
         self.calibrated = Event()
@@ -40,11 +43,23 @@ class CameraCalibration():
         """True if calibrated, False otherwise."""
         return self._is_calibrated
 
+    @property
+    def camera_matrix(self):
+        """Intrinsic camera matrix."""
+        return self._camera_matrix
+
+    @property
+    def dist_coeff(self):
+        """distortion vector."""
+        return self._dist_coeff
+
     def reset_recording(self):
         """Disable recording mode and reset data structures."""
         self.record_cnt = 0
         self.obj_points = []
         self.img_points = []
+        self._camera_matrix = []
+        self._dist_coeff = []
 
     def calibrate(self):
         """Start camera calibration process."""
@@ -103,6 +118,9 @@ class CameraCalibration():
                 (image_height, image_width),
                 None, None)
 
+            self._camera_matrix = k
+            self._dist_coeff = dist
+
             # calculate re-projection error.
             # this should be as close to zero as possible.
             self._mean_error = 0
@@ -121,3 +139,13 @@ class CameraCalibration():
             self.calibrated()
 
         return frame
+
+    def save_calibration(self, pathname):
+        """Save camera calibration parameters in json file."""
+        data = {
+            "camera_matrix": self.camera_matrix,
+            "dist_coeff": self.dist_coeff,
+            "mean_error": self.mean_error
+            }
+        with open(pathname, "w") as file:
+            json.dump(data, file)
