@@ -29,87 +29,98 @@ class MainWindow(wx.Frame):
         self.bitmap = None
         self.camera_label = None
         self.camera_menu_ids = []
+        self.menu_load_calibration = None
         self.menu_save_capture = None
+        self.menu_save_calibration = None
+        self.button_capture = None
         self.button_calibrate = None
+        self.button_cancel = None
+        self.chk_undistort = None
         self.camera = Camera()
+        self.screen = None
+        self.right_panel = None
+        self.calibration_panel = None
         self.calibration = CameraCalibration()
         self.calibration.calibrated += self.on_calibrated
         self.calibration.on_progress += self.on_calibration_progress
 
-        self.screen = wx.Panel(self, size=(SCREEN_WIDTH, SCREEN_HEIGHT))
-        self.screen.Bind(wx.EVT_PAINT, self._on_paint)
-        self.screen.Bind(wx.EVT_ERASE_BACKGROUND, self._disable_event)
+        self.create_layout()
+        self.create_menu()
 
-        panel1 = wx.Panel(self)
-        sizer1 = wx.BoxSizer(wx.VERTICAL)
+        self.button_capture.Bind(wx.EVT_BUTTON, self.on_capture)
+        self.button_calibrate.Bind(wx.EVT_BUTTON, self.on_calibrate)
+        self.button_cancel.Bind(wx.EVT_BUTTON, self.on_cancel_calibrate)
+        self.chk_undistort.Bind(wx.EVT_CHECKBOX, self.on_undistort)
 
-        panel2 = wx.Panel(panel1)
-        panel2.SetMinSize((200, 400))
-        sizer2 = wx.BoxSizer(wx.VERTICAL)
-
-        self.camera_label = wx.StaticText(panel2, label="Camera 0")
-        sizer2.Add(self.camera_label, flag=wx.LEFT)
-
-        self.preview = wx.StaticBitmap(panel2, size=(SCREEN_WIDTH // 4, SCREEN_HEIGHT // 4))
-        self.preview.SetBackgroundColour(wx.LIGHT_GREY)
-        sizer2.Add(self.preview, flag=wx.TOP, border=10)
-
-        button1 = wx.Button(panel2, label='Capture')
-        sizer2.Add(button1, flag=wx.TOP, border=6)
-        button1.Bind(wx.EVT_BUTTON, self._on_capture)
-
-        calibration_file_name = "camera1_calibration.xml"
-        calibration_file = (calibration_file_name[:16] + '...') \
-            if len(calibration_file_name) > 16 else calibration_file_name
-
-        self.calibration_panel = CalibrationPanel(panel2)
-        self.calibration_panel.status = "no"
-
-        sizer3 = wx.FlexGridSizer(3, 2, 4, 10)
-        label1 = wx.StaticText(panel2, label="Calibrated:")
-        self.calibration_status = wx.StaticText(panel2, label="no")
-        label3 = wx.StaticText(panel2, label="Mean error:")
-        self.calibration_error = wx.StaticText(panel2, label="")
-        label5 = wx.StaticText(panel2, label="Calibration file:")
-        label6 = wx.StaticText(panel2, label=calibration_file)
-        sizer3.AddMany([(label1, 0, wx.EXPAND),
-                        (self.calibration_status, 0, wx.EXPAND),
-                        (label3, 0, wx.EXPAND),
-                        (self.calibration_error, 0, wx.EXPAND),
-                        (label5, 0, wx.EXPAND),
-                        (label6, 0, wx.EXPAND)])
-
-        sizer2.Add(sizer3, flag=wx.TOP, border=20)
-
-        self.button_calibrate = wx.Button(panel2, label='Calibrate')
-        self.button_calibrate.Bind(wx.EVT_BUTTON, self._on_calibrate)
-
-        sizer2.Add(self.calibration_panel, flag=wx.LEFT|wx.RIGHT|wx.EXPAND)
-        sizer2.Add(self.button_calibrate, flag=wx.TOP, border=6)
-        sizer1.Add(panel2, flag=wx.LEFT|wx.RIGHT|wx.BOTTOM, border=16)
-
-        panel2.SetSizer(sizer2)
-        panel1.SetSizer(sizer1)
-
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(self.screen, 0, wx.ALIGN_CENTER)
-        sizer.Add(panel1, flag=wx.EXPAND)
-
-        self._create_menu()
-
-        self.SetSizerAndFit(sizer)
         self.Show(True)
 
-    def _disable_event(*pargs, **kwargs):
+    def disable_event(*pargs, **kwargs):
         # pylint: disable=E0211
         pass
 
-    def _create_menu(self):
+    def create_layout(self):
+        self.screen = wx.Panel(self, size=(SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.screen.Bind(wx.EVT_PAINT, self.on_paint)
+        self.screen.Bind(wx.EVT_ERASE_BACKGROUND, self.disable_event)
+
+        self.right_panel = wx.Panel(self)
+
+        sizer1 = wx.BoxSizer(wx.VERTICAL)
+        panel1 = wx.Panel(self.right_panel)
+        panel1.SetMinSize((200, 400))
+        sizer2 = wx.BoxSizer(wx.VERTICAL)
+
+        self.camera_label = wx.StaticText(panel1, label="Camera 0")
+        sizer2.Add(self.camera_label, flag=wx.TOP)
+
+        self.preview = wx.StaticBitmap(panel1, size=(SCREEN_WIDTH // 4, SCREEN_HEIGHT // 4))
+        self.preview.SetBackgroundColour(wx.LIGHT_GREY)
+        sizer2.Add(self.preview, flag=wx.TOP, border=10)
+
+        self.button_capture = wx.Button(panel1, label='Capture')
+        sizer2.Add(self.button_capture, flag=wx.TOP, border=6)
+
+        self.calibration_panel = CalibrationPanel(panel1)
+        self.calibration_panel.status = "no"
+        self.calibration_panel.filename = "camera1_calibration.xml"
+        sizer2.Add(self.calibration_panel, flag=wx.TOP, border=16)
+
+        self.button_calibrate = wx.Button(panel1, label='Calibrate')
+        self.button_cancel = wx.Button(panel1, label='Cancel')
+        self.button_cancel.Disable()
+
+        sizer3 = wx.BoxSizer(wx.HORIZONTAL)
+        sizer3.Add(self.button_calibrate, flag=wx.TOP, border=6)
+        sizer3.Add(self.button_cancel, flag=wx.TOP, border=6)
+
+        sizer2.Add(sizer3, flag=wx.LEFT|wx.RIGHT|wx.EXPAND)
+
+        self.chk_undistort = wx.CheckBox(panel1, label="Undistort")
+        self.chk_undistort.SetValue(False)
+        self.chk_undistort.Disable()
+        sizer2.Add(self.chk_undistort, flag=wx.TOP, border=16)
+
+        sizer1.Add(panel1, flag=wx.LEFT|wx.RIGHT|wx.BOTTOM, border=16)
+        panel1.SetSizer(sizer2)
+        self.right_panel.SetSizer(sizer1)
+
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(self.screen, 0, wx.ALIGN_CENTER)
+        sizer.Add(self.right_panel, flag=wx.EXPAND)
+
+        self.SetSizerAndFit(sizer)
+
+    def create_menu(self):
         menu1 = wx.Menu()
+        self.menu_load_calibration = menu1.Append(wx.ID_ANY, "Load calibration file")
         menu1.AppendSeparator()
         self.menu_save_capture = menu1.Append(wx.ID_ANY, "Save captured image")
-        self.menu_save_capture.Enable(False)
+        self.menu_save_calibration = menu1.Append(wx.ID_ANY, "Save calibration file")
+        menu1.AppendSeparator()
         menu_exit = menu1.Append(wx.ID_EXIT, "E&xit")
+
+        self.menu_save_capture.Enable(False)
+        self.menu_save_calibration.Enable(False)
 
         menu2 = wx.Menu()
         camera_menu_items = []
@@ -118,7 +129,7 @@ class MainWindow(wx.Frame):
             self.camera_menu_ids.append(menu_id)
             menu_item = menu2.Append(menu_id, f"Camera {i}", kind=wx.ITEM_RADIO)
             camera_menu_items.append(menu_item)
-            self.Bind(wx.EVT_MENU, self._on_camera, menu_item)
+            self.Bind(wx.EVT_MENU, self.on_camera, menu_item)
 
         menu2.Check(self.camera_menu_ids[0], True)
 
@@ -128,8 +139,8 @@ class MainWindow(wx.Frame):
         self.SetMenuBar(menu_bar)
 
         # Set events
-        self.Bind(wx.EVT_MENU, self._on_save_capture, self.menu_save_capture)
-        self.Bind(wx.EVT_MENU, self._on_exit, menu_exit)
+        self.Bind(wx.EVT_MENU, self.on_save_capture, self.menu_save_capture)
+        self.Bind(wx.EVT_MENU, self.on_exit, menu_exit)
 
     def capture_video(self, device=0, fps=30, size=(640, 480)):
         """Sets periodic screen capture.
@@ -153,36 +164,56 @@ class MainWindow(wx.Frame):
         # set up periodic screen capture
         self.timer = wx.Timer(self)
         self.timer.Start(1000. / self.camera.fps)
-        self.Bind(wx.EVT_TIMER, self._on_next_frame)
+        self.Bind(wx.EVT_TIMER, self.on_next_frame)
 
-    def _on_camera(self, event):
+    def on_camera(self, event):
         # pylint: disable=W0613
         menu_id = event.GetId()
         device_number = self.camera_menu_ids.index(menu_id)
         self.camera_label.SetLabel(f"Camera {device_number}")
         self.capture_video(device_number)
 
-    def _on_calibrate(self, event):
+    def on_calibrate(self, event):
         # pylint: disable=W0613
+        self.chk_undistort.SetValue(False)
+        self.chk_undistort.Disable()
         self.button_calibrate.Disable()
+        self.button_cancel.Enable()
         self.calibration.calibrate()
+        self.menu_load_calibration.Enable(False)
+        self.menu_save_calibration.Enable(False)
+        self.calibration_panel.filename = ""
+
+    def on_cancel_calibrate(self, event):
+        # pylint: disable=W0613
+        self.button_calibrate.Enable()
+        self.button_cancel.Disable()
+        self.calibration.cancel()
+        self.calibration_panel.status = "no"
+        self.calibration_panel.error = ""
+        self.menu_load_calibration.Enable(True)
+
+    def on_undistort(self, event):
+        # pylint: disable=W0613
+        pass
 
     def on_calibrated(self):
         # pylint: disable=C0111
+        calibrated = self.calibration.is_calibrated
         self.button_calibrate.Enable()
-        self.calibration_panel.status = "yes" if self.calibration.is_calibrated else "no"
+        self.button_cancel.Disable()
+        self.calibration_panel.status = "yes" if calibrated else "no"
         self.calibration_panel.error = "{:.3f}".format(self.calibration.mean_error) \
-            if self.calibration.is_calibrated else ""
-        self.calibration_status.SetLabel("yes" if self.calibration.is_calibrated else "no")
-        self.calibration_error.SetLabel("{:.3f}".format(self.calibration.mean_error) \
-            if self.calibration.is_calibrated else "")
+            if calibrated else ""
+        self.chk_undistort.Enabled = calibrated
+        self.menu_load_calibration.Enable(True)
+        self.menu_save_calibration.Enable(calibrated)
 
     def on_calibration_progress(self, progress):
         # pylint: disable=C0111
         self.calibration_panel.status = progress
-        self.calibration_status.SetLabel(progress)
 
-    def _on_next_frame(self, event):
+    def on_next_frame(self, event):
         """Captures a new frame from the camera and copies it
            to an image buffer to be displayed.
         """
@@ -200,14 +231,14 @@ class MainWindow(wx.Frame):
 
             self.Refresh(eraseBackground=False)
 
-    def _on_paint(self, event):
+    def on_paint(self, event):
         # pylint: disable=W0613
         # read and draw buffered bitmap
         if self.bitmap is not None:
             _device_context = wx.BufferedPaintDC(self.screen)
             _device_context.DrawBitmap(self.bitmap, 0, 0)
 
-    def _on_capture(self, event):
+    def on_capture(self, event):
         # pylint: disable=W0613
         if self.bitmap is not None:
             size = self.preview.GetSize()
@@ -216,7 +247,7 @@ class MainWindow(wx.Frame):
             self.preview.SetBitmap(wx.Bitmap(image))
             self.menu_save_capture.Enable(True)
 
-    def _on_save_capture(self, event):
+    def on_save_capture(self, event):
         # pylint: disable=W0613
         with wx.FileDialog(self, "Save captured image", wildcard="PNG files (*.png)|*.png",
                            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as file_dialog:
@@ -230,8 +261,9 @@ class MainWindow(wx.Frame):
             except IOError:
                 wx.LogError(f"Cannot save captured image in file '{pathname}'.")
 
-    def _on_exit(self, event):
+    def on_exit(self, event):
         # pylint: disable=W0613
+        self.timer.Stop()
         self.camera.release()
         self.Close(True)
 
