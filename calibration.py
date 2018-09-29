@@ -14,11 +14,12 @@ class CameraCalibration():
         self.chessboard_size = (9, 6)
         self.record_min_num_frames = MIN_CALIBRATION_FRAMES
         self.record_cnt = 0
-        self.recording = False
+        self._recording = False
         self._mean_error = 0
         self._is_calibrated = False
-        self._camera_matrix = []
-        self._dist_coeff = []
+        self._camera_matrix = None
+        self._dist_coeff = None
+        self._calibration_file = None
 
         # events
         self.calibrated = Event()
@@ -50,41 +51,52 @@ class CameraCalibration():
 
     @property
     def dist_coeff(self):
-        """distortion vector."""
+        """Distortion vector."""
         return self._dist_coeff
+
+    @property
+    def calibration_file(self):
+        """Calibration file."""
+        return self._calibration_file
+
+    @property
+    def is_calibrating(self):
+        """Flag is True if calibration is in progress."""
+        return self._recording
+
+    @property
+    def can_undistort(self):
+        """Flag is True if an image can be undistorted using calibration parameters."""
+        return self.is_calibrated and not self._recording
 
     def reset_recording(self):
         """Disable recording mode and reset data structures."""
         self.record_cnt = 0
         self.obj_points = []
         self.img_points = []
-        self._camera_matrix = []
-        self._dist_coeff = []
 
-    def calibrate(self):
+    def start_calibration(self):
         """Start camera calibration process."""
         self.reset_recording()
-        self.recording = True
+        self._recording = True
         self._is_calibrated = False
+        self._calibration_file = None
 
-    def cancel(self):
+    def cancel_calibration(self):
         """Cancel camera calibration process."""
-        self.recording = False
+        self._recording = False
         self._is_calibrated = False
         self.reset_recording()
 
-    def process_frame(self, frame):
+    def calibrate(self, frame):
         """Processes each frame.
 
         Args:
             frame (image): input image: 8-bit unsigned, 16-bit unsigned,
             or single-precision floating-point.
-
-        Returns:
-            Output image of the same size and depth as the input image.
         """
-        if not self.recording:
-            return frame
+        if not self._recording:
+            return
 
         if self.record_cnt < self.record_min_num_frames:
 
@@ -109,7 +121,7 @@ class CameraCalibration():
                 self.on_progress(message)
         else:
             # calculate the intrinsic camera matrix (k) and the distortion vector (dist)
-            self.recording = False
+            self._recording = False
             image_height, image_width = frame.shape[:2]
 
             # get the camera matrix, distortion coefficients, rotation and translation vectors
@@ -138,14 +150,42 @@ class CameraCalibration():
             self.reset_recording()
             self.calibrated()
 
-        return frame
+    def undistort(self, frame):
+        if not self._is_calibrated:
+            return frame
+
+        # undistort
+        height, width = frame.shape[:2]
+        size = (width, height)
+        new_camera_matrix, roi = cv2.getOptimalNewCameraMatrix(
+            self._camera_matrix, self._dist_coeff, size, 1, size)
+        dst = cv2.undistort(frame, self._camera_matrix, self._dist_coeff, None, new_camera_matrix)
+
+        # crop the image
+        x, y, w, h = roi
+        dst = dst[y:y+h, x:x+w]
+        new_image = np.zeros((height, width, 3), np.uint8)
+        new_image[y:y+h, x:x+w] = dst
+        return new_image
 
     def save_calibration(self, pathname):
         """Save camera calibration parameters in json file."""
         data = {
-            "camera_matrix": self.camera_matrix,
-            "dist_coeff": self.dist_coeff,
-            "mean_error": self.mean_error
+            "camera_matrix": self._camera_matrix.tolist(),
+            "dist_coeff": self._dist_coeff.tolist(),
+            "mean_error": self._mean_error
             }
         with open(pathname, "w") as file:
             json.dump(data, file)
+            self._calibration_file = pathname
+
+    def load_calibration(self, pathname):
+        """Load camera calibration parameters from a file."""
+        self._calibration_file = None
+        with open(pathname, "r") as file:
+            data = json.load(file)
+            self._camera_matrix = np.array(data['camera_matrix'])
+            self._dist_coeff = np.array(data['dist_coeff'])
+            self._mean_error = data['mean_error']
+            self._calibration_file = pathname
+            self._is_calibrated = True

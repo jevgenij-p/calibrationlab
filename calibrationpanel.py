@@ -1,5 +1,6 @@
 """A module creating UI control, containing calibration properties."""
 
+import os
 import wx
 
 MAX_FILENAME_LABEL = 16
@@ -17,13 +18,13 @@ class CalibrationPanel(wx.Panel):
         self._error = wx.StaticText(self, label="")
         self._file = wx.StaticText(self, label="")
         fsizer.AddMany([(wx.StaticText(self, label="Calibrated:"), 0, wx.EXPAND),
-                        (self._status, 0, wx.EXPAND),
+                        (self._status, 1, wx.EXPAND),
                         (wx.StaticText(self, label="Mean error:"), 0, wx.EXPAND),
-                        (self._error, 0, wx.EXPAND),
+                        (self._error, 1, wx.EXPAND),
                         (wx.StaticText(self, label="Calibration file:"), 0, wx.EXPAND),
-                        (self._file, 0, wx.EXPAND)])
+                        (self._file, 1, wx.EXPAND)])
 
-        sizer.Add(fsizer, flag=wx.TOP)
+        sizer.Add(fsizer, flag=wx.TOP|wx.EXPAND)
         self.SetSizer(sizer)
 
     @property
@@ -52,6 +53,7 @@ class CalibrationPanel(wx.Panel):
     @filename.setter
     def filename(self, value):
         self._filename = value
-        label = (self._filename[:MAX_FILENAME_LABEL] + '...') \
-            if len(self._filename) > MAX_FILENAME_LABEL else self._filename
+        basename = os.path.basename(value)
+        label = (basename[:MAX_FILENAME_LABEL] + '...') \
+            if len(basename) > MAX_FILENAME_LABEL else basename
         self._file.SetLabel(label)

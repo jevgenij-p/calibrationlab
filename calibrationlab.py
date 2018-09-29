@@ -1,9 +1,5 @@
 
-"""An application for exploring OpenCV functions working with a camera.
-"""
-# https://wiki.wxpython.org/Getting%20Started
-# http://zetcode.com/wxpython/layout/
-# http://www.blog.pythonlibrary.org/2012/02/14/wxpython-all-about-menus/
+"""An application for calibrating video cameras with OpenCV."""
 
 import wx
 import cv2
@@ -36,6 +32,7 @@ class MainWindow(wx.Frame):
         self.button_calibrate = None
         self.button_cancel = None
         self.chk_undistort = None
+        self.undistort = False
         self.camera = Camera()
         self.screen = None
         self.right_panel = None
@@ -55,10 +52,12 @@ class MainWindow(wx.Frame):
         self.Show(True)
 
     def disable_event(*pargs, **kwargs):
+        """Empty event handler."""
         # pylint: disable=E0211
         pass
 
     def create_layout(self):
+        """Create UI layout elements."""
         self.screen = wx.Panel(self, size=(SCREEN_WIDTH, SCREEN_HEIGHT))
         self.screen.Bind(wx.EVT_PAINT, self.on_paint)
         self.screen.Bind(wx.EVT_ERASE_BACKGROUND, self.disable_event)
@@ -82,8 +81,7 @@ class MainWindow(wx.Frame):
 
         self.calibration_panel = CalibrationPanel(panel1)
         self.calibration_panel.status = "no"
-        self.calibration_panel.filename = "camera1_calibration.xml"
-        sizer2.Add(self.calibration_panel, flag=wx.TOP, border=16)
+        sizer2.Add(self.calibration_panel, flag=wx.TOP|wx.EXPAND, border=16)
 
         self.button_calibrate = wx.Button(panel1, label='Calibrate')
         self.button_cancel = wx.Button(panel1, label='Cancel')
@@ -111,11 +109,11 @@ class MainWindow(wx.Frame):
         self.SetSizerAndFit(sizer)
 
     def create_menu(self):
+        """Create main menu."""
         menu1 = wx.Menu()
         self.menu_load_calibration = menu1.Append(wx.ID_ANY, "Load calibration file")
-        menu1.AppendSeparator()
-        self.menu_save_capture = menu1.Append(wx.ID_ANY, "Save captured image")
         self.menu_save_calibration = menu1.Append(wx.ID_ANY, "Save calibration file")
+        self.menu_save_capture = menu1.Append(wx.ID_ANY, "Save captured image")
         menu1.AppendSeparator()
         menu_exit = menu1.Append(wx.ID_EXIT, "E&xit")
 
@@ -137,6 +135,7 @@ class MainWindow(wx.Frame):
         self.SetMenuBar(menu_bar)
 
         # Set events
+        self.Bind(wx.EVT_MENU, self.on_load_calibration, self.menu_load_calibration)
         self.Bind(wx.EVT_MENU, self.on_save_calibration, self.menu_save_calibration)
         self.Bind(wx.EVT_MENU, self.on_save_capture, self.menu_save_capture)
         self.Bind(wx.EVT_MENU, self.on_exit, menu_exit)
@@ -149,7 +148,6 @@ class MainWindow(wx.Frame):
             fps (int): Frames per second. Default is 30 frames.
             size ((width, height)): Frame width and height in pixels.
         """
-
         # open webcam
         try:
             self.camera.capture_video(device, fps, size)
@@ -166,6 +164,7 @@ class MainWindow(wx.Frame):
         self.Bind(wx.EVT_TIMER, self.on_next_frame)
 
     def on_camera(self, event):
+        """Connect to a camera with selected device number."""
         # pylint: disable=W0613
         menu_id = event.GetId()
         device_number = self.camera_menu_ids.index(menu_id)
@@ -173,31 +172,35 @@ class MainWindow(wx.Frame):
         self.capture_video(device_number)
 
     def on_calibrate(self, event):
+        """Start calibration process."""
         # pylint: disable=W0613
+        self.undistort = False
         self.chk_undistort.SetValue(False)
         self.chk_undistort.Disable()
         self.button_calibrate.Disable()
         self.button_cancel.Enable()
-        self.calibration.calibrate()
+        self.calibration.start_calibration()
         self.menu_load_calibration.Enable(False)
         self.menu_save_calibration.Enable(False)
         self.calibration_panel.filename = ""
 
     def on_cancel_calibrate(self, event):
+        """Cancel calibration process."""
         # pylint: disable=W0613
         self.button_calibrate.Enable()
         self.button_cancel.Disable()
-        self.calibration.cancel()
+        self.calibration.cancel_calibration()
         self.calibration_panel.status = "no"
         self.calibration_panel.error = ""
         self.menu_load_calibration.Enable(True)
 
     def on_undistort(self, event):
+        """Update undistort flag."""
         # pylint: disable=W0613
-        pass
+        self.undistort = self.chk_undistort.GetValue()
 
     def on_calibrated(self):
-        # pylint: disable=C0111
+        """Update controls upon calibration completion."""
         calibrated = self.calibration.is_calibrated
         self.button_calibrate.Enable()
         self.button_cancel.Disable()
@@ -209,7 +212,7 @@ class MainWindow(wx.Frame):
         self.menu_save_calibration.Enable(calibrated)
 
     def on_calibration_progress(self, progress):
-        # pylint: disable=C0111
+        """Update calibration progress."""
         self.calibration_panel.status = progress
 
     def on_next_frame(self, event):
@@ -219,7 +222,12 @@ class MainWindow(wx.Frame):
         # pylint: disable=W0613
         success, frame = self.camera.read_frame()
         if success:
-            frame = self.calibration.process_frame(frame)
+            if self.calibration.is_calibrating:
+                self.calibration.calibrate(frame)
+
+            if self.calibration.can_undistort and self.undistort:
+                frame = self.calibration.undistort(frame)
+
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             # update buffer and paint
@@ -231,6 +239,7 @@ class MainWindow(wx.Frame):
             self.Refresh(eraseBackground=False)
 
     def on_paint(self, event):
+        """Draw an image captured by the camera on the self.screen panel."""
         # pylint: disable=W0613
         # read and draw buffered bitmap
         if self.bitmap is not None:
@@ -238,6 +247,7 @@ class MainWindow(wx.Frame):
             _device_context.DrawBitmap(self.bitmap, 0, 0)
 
     def on_capture(self, event):
+        """Draw captured image on the self.preview control."""
         # pylint: disable=W0613
         if self.bitmap is not None:
             size = self.preview.GetSize()
@@ -247,6 +257,7 @@ class MainWindow(wx.Frame):
             self.menu_save_capture.Enable(True)
 
     def on_save_capture(self, event):
+        """Save captured image in the file."""
         # pylint: disable=W0613
         with wx.FileDialog(self, "Save captured image", wildcard="PNG files (*.png)|*.png",
                            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as file_dialog:
@@ -260,7 +271,29 @@ class MainWindow(wx.Frame):
             except IOError:
                 wx.LogError(f"Cannot save captured image in file '{pathname}'.")
 
+    def on_load_calibration(self, event):
+        """Load calibration parameters from a file."""
+        # pylint: disable=W0613
+        with wx.FileDialog(self, "Load calibration file", wildcard="JSON files (*.json)|*.json",
+                           style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as file_dialog:
+
+            if file_dialog.ShowModal() == wx.ID_CANCEL:
+                return
+
+            pathname = file_dialog.GetPath()
+            try:
+                self.calibration.load_calibration(pathname)
+                self.calibration_panel.status = "yes"
+                self.calibration_panel.filename = pathname
+                self.calibration_panel.error = "{:.3f}".format(self.calibration.mean_error)
+                self.menu_save_calibration.Enable(True)
+                self.chk_undistort.Enabled = True
+            except IOError:
+                wx.LogError(f"Cannot save calibration data in file '{pathname}'.")
+
     def on_save_calibration(self, event):
+        """Save calibration parameters to the file."""
+        # pylint: disable=W0613
         with wx.FileDialog(self, "Save calibration file", wildcard="JSON files (*.json)|*.json",
                            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as file_dialog:
 
@@ -270,10 +303,12 @@ class MainWindow(wx.Frame):
             pathname = file_dialog.GetPath()
             try:
                 self.calibration.save_calibration(pathname)
+                self.calibration_panel.filename = pathname
             except IOError:
                 wx.LogError(f"Cannot save calibration data in file '{pathname}'.")
 
     def on_exit(self, event):
+        """Release resources and close the application."""
         # pylint: disable=W0613
         self.timer.Stop()
         self.camera.release()
@@ -281,8 +316,7 @@ class MainWindow(wx.Frame):
 
 
 def main():
-    """Method creating main window.
-    """
+    """Method creating main window."""
     app = wx.App(False)
     frame = MainWindow(None, "Camera")
     frame.capture_video(device=0, fps=30, size=(640, 480))
