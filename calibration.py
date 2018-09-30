@@ -151,6 +151,14 @@ class CameraCalibration():
             self.calibrated()
 
     def undistort(self, frame):
+        """Undistort a frame.
+
+        Args:
+            frame (image): input image: 8-bit unsigned, 16-bit unsigned,
+            or single-precision floating-point.
+        Returns:
+            undistorted frame of the same size as the original one.
+        """
         if not self._is_calibrated:
             return frame
 
